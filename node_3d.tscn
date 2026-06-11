@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3 uid="uid://bnffsxatyyehv"]
+
+[ext_resource type="PackedScene" uid="uid://dg2y1scieurbe" path="res://cristamagVR_3x3x3_colored.blend" id="1_a202f"]
+[ext_resource type="Script" uid="uid://bsdpwc14ebhv4" path="res://vr_rig.gd" id="3_a0tk4"]
+
+[node name="Node3D" type="Node3D"]
+
+[node name="cristamagVR_3x3x3_colored" parent="." instance=ExtResource("1_a202f")]
+
+[node name="Cube" parent="cristamagVR_3x3x3_colored" index="0"]
+visible = false
+
+[node name="Camera" parent="cristamagVR_3x3x3_colored" index="2"]
+visible = false
+
+[node name="VRRig" type="XROrigin3D" parent="."]
+script = ExtResource("3_a0tk4")
+
+[node name="XRCamera3D" type="XRCamera3D" parent="VRRig"]
+current = true
+
+[node name="LeftHand" type="XRController3D" parent="VRRig"]
+tracker = &"left_hand"
+
+[node name="RightHand" type="XRController3D" parent="VRRig"]
+tracker = &"right_hand"
+
+[editable path="cristamagVR_3x3x3_colored"]
