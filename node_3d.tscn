@@ -10,9 +10,6 @@
 [node name="Cube" parent="cristamagVR_3x3x3_colored" index="0"]
 visible = false
 
-[node name="Camera" parent="cristamagVR_3x3x3_colored" index="2"]
-visible = false
-
 [node name="VRRig" type="XROrigin3D" parent="."]
 script = ExtResource("3_a0tk4")
 
@@ -24,5 +21,8 @@ tracker = &"left_hand"
 
 [node name="RightHand" type="XRController3D" parent="VRRig"]
 tracker = &"right_hand"
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 300, 100)
 
 [editable path="cristamagVR_3x3x3_colored"]

@@ -1,6 +1,6 @@
 extends XROrigin3D
 
-@export var move_speed: float = 20
+@export var move_speed: float = 50
 @export var turn_speed: float = 1.5
 
 @onready var xr_camera: XRCamera3D = $XRCamera3D
