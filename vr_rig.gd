@@ -9,10 +9,6 @@ extends XROrigin3D
 
 func _ready():
 	var xr_interface = XRServer.find_interface("OpenXR")
-	if XrSimulator.enabled:
-		if xr_interface and xr_interface.is_initialized():
-			xr_interface.uninitialize()
-		return
 	if xr_interface and xr_interface.is_initialized():
 		get_viewport().use_xr = true
 
