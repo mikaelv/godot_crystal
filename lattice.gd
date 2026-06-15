@@ -61,6 +61,17 @@ const UNIT_CELL_B: Array[Vector3i] = [
 	Vector3i(1,1,1), Vector3i(3,3,1), Vector3i(3,1,3), Vector3i(1,3,3),
 ]
 
+# Neighbouring cells revealed one per step in the tiling phase.
+const TILE_OFFSETS: Array[Vector3i] = [
+	Vector3i(4, 0, 0),
+	Vector3i(0, 4, 0),
+	Vector3i(0, 0, 4),
+	Vector3i(4, 4, 0),
+	Vector3i(4, 0, 4),
+	Vector3i(0, 4, 4),
+	Vector3i(4, 4, 4),
+]
+
 @export var right_controller: XRController3D
 @export var advance_button: StringName = &"ax_button"
 @export var retreat_button: StringName = &"by_button"
@@ -68,6 +79,7 @@ const UNIT_CELL_B: Array[Vector3i] = [
 var _step: int = 0
 var _step_nodes: Array[Node3D] = []
 var _atoms: Dictionary = {}
+var _bonds_drawn: Dictionary = {}  # canonical bond key -> true, to dedupe
 
 func _ready() -> void:
 	if right_controller:
@@ -104,6 +116,8 @@ func _retreat() -> void:
 	for child in container.get_children():
 		if child.has_meta("qc"):
 			_atoms.erase(child.get_meta("qc"))
+		if child.has_meta("bond_key"):
+			_bonds_drawn.erase(child.get_meta("bond_key"))
 	container.queue_free()
 	_step -= 1
 
@@ -116,8 +130,12 @@ func _run_step(step: int, container: Node3D) -> bool:
 		5: _step_other_interior_b(container)
 		6: _step_far_atoms_and_bonds(container)
 		7: _spawn_cube(container, Vector3i.ZERO, COLOR_CELL, 0.04)
-		8: _step_tile_supercell(container)
-		_: return false
+		8: _spawn_cell_a_bonds(container, Vector3i.ZERO)
+		_:
+			if step >= 9 and step < 9 + TILE_OFFSETS.size():
+				_step_add_tile(container, step - 9)
+			else:
+				return false
 	return true
 
 # --- Steps --------------------------------------------------------------------
@@ -165,7 +183,8 @@ func _step_tetrahedron_atoms(container: Node3D) -> void:
 		_spawn_atom(container, a, COLOR_A)
 
 # Step 4: each of those 4 A atoms has 3 more bonds. Some head into the cube
-# (toward the other interior B atoms), others hang out toward neighbouring cells.
+# (toward the other interior B atoms), others hang out toward neighbouring cells —
+# the boundary-dangler step will not redraw them thanks to bond dedup.
 func _step_a_outward_bonds(container: Node3D) -> void:
 	for a in TETRAHEDRON_A:
 		for d in BONDS_A_TO_B:
@@ -193,16 +212,24 @@ func _step_far_atoms_and_bonds(container: Node3D) -> void:
 	for corner in LONE_CORNERS:
 		_spawn_atom(container, corner, COLOR_A)
 
-# Step 8: tile our cell into a 2×2×2 supercell — 7 more cells at offsets in {0, 4}^3.
-func _step_tile_supercell(container: Node3D) -> void:
-	for ox in [0, CELL_SIZE]:
-		for oy in [0, CELL_SIZE]:
-			for oz in [0, CELL_SIZE]:
-				if ox == 0 and oy == 0 and oz == 0:
-					continue
-				var off := Vector3i(ox, oy, oz)
-				_spawn_unit_cell(container, off)
-				_spawn_cube(container, off, COLOR_CELL_NEIGHBOR, 0.025)
+# Steps 9–15: add one neighbouring unit cell per press, building up the 2×2×2 supercell.
+# Each tile draws its own A-atom outward bonds, so the same dangler-and-link
+# pattern shown for the original cell repeats on every tile.
+func _step_add_tile(container: Node3D, idx: int) -> void:
+	var offset: Vector3i = TILE_OFFSETS[idx]
+	_spawn_unit_cell(container, offset)
+	_spawn_cell_a_bonds(container, offset)
+	_spawn_cube(container, offset, COLOR_CELL_NEIGHBOR, 0.025)
+
+# Draws all 4 tetrahedral bonds from every A atom in the unit cell at `offset`.
+# Used both for the post-cube "preview" step and for each tile — dedup means
+# bonds shared between cells collapse, bonds reaching outside the supercell
+# remain as dangling stubs.
+func _spawn_cell_a_bonds(container: Node3D, offset: Vector3i) -> void:
+	for a in UNIT_CELL_A:
+		var a_pos: Vector3i = a + offset
+		for d in BONDS_A_TO_B:
+			_spawn_bond(container, a_pos, a_pos + d)
 
 # --- Helpers ------------------------------------------------------------------
 
@@ -248,15 +275,36 @@ func _spawn_atom(container: Node3D, qc: Vector3i, color: Color) -> void:
 	_atoms[qc] = mi
 
 func _spawn_bond(container: Node3D, qc_a: Vector3i, qc_b: Vector3i) -> void:
-	_spawn_edge(container, qc_a, qc_b, COLOR_BOND, BOND_RADIUS)
+	var key := _bond_key(qc_a, qc_b)
+	if _bonds_drawn.has(key):
+		return
+	var mi := _make_segment(_qc_to_world(qc_a), _qc_to_world(qc_b), COLOR_BOND, BOND_RADIUS)
+	if mi == null:
+		return
+	mi.set_meta("bond_key", key)
+	_bonds_drawn[key] = true
+	container.add_child(mi)
+
+func _bond_key(qc_a: Vector3i, qc_b: Vector3i) -> String:
+	# Canonical (unordered) key so a bond drawn from either side dedupes.
+	var sa := "%d,%d,%d" % [qc_a.x, qc_a.y, qc_a.z]
+	var sb := "%d,%d,%d" % [qc_b.x, qc_b.y, qc_b.z]
+	if sa < sb:
+		return sa + "|" + sb
+	return sb + "|" + sa
 
 func _spawn_edge(container: Node3D, qc_a: Vector3i, qc_b: Vector3i, color: Color, radius: float) -> void:
 	_spawn_segment(container, _qc_to_world(qc_a), _qc_to_world(qc_b), color, radius)
 
 func _spawn_segment(container: Node3D, a: Vector3, b: Vector3, color: Color, radius: float) -> void:
+	var mi := _make_segment(a, b, color, radius)
+	if mi:
+		container.add_child(mi)
+
+func _make_segment(a: Vector3, b: Vector3, color: Color, radius: float) -> MeshInstance3D:
 	var length := a.distance_to(b)
 	if length < 0.0001:
-		return
+		return null
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius
@@ -272,7 +320,7 @@ func _spawn_segment(container: Node3D, a: Vector3, b: Vector3, color: Color, rad
 		mi.basis = Basis(up.cross(dir).normalized(), up.angle_to(dir))
 	elif dot < 0.0:
 		mi.basis = Basis(Vector3.RIGHT, PI)
-	container.add_child(mi)
+	return mi
 
 func _flat_material(color: Color) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
