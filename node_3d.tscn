@@ -1,14 +1,20 @@
-[gd_scene load_steps=4 format=3 uid="uid://bnffsxatyyehv"]
+[gd_scene load_steps=6 format=3 uid="uid://bnffsxatyyehv"]
 
 [ext_resource type="PackedScene" uid="uid://dg2y1scieurbe" path="res://cristamagVR_3x3x3_colored.blend" id="1_a202f"]
 [ext_resource type="Script" uid="uid://bsdpwc14ebhv4" path="res://vr_rig.gd" id="3_a0tk4"]
+[ext_resource type="Script" uid="uid://dlbjnjcyigo3k" path="res://lattice.gd" id="4_lattice"]
+[ext_resource type="Script" uid="uid://csqdlf30sx55b" path="res://debug_hud.gd" id="5_debug"]
 
 [sub_resource type="Environment" id="Environment_noarx"]
-background_energy_multiplier = 2.63
+background_mode = 0
+ambient_light_source = 2
+ambient_light_color = Color(0.55, 0.6, 0.7, 1)
+ambient_light_energy = 0.35
 
 [node name="Node3D" type="Node3D"]
 
 [node name="cristamagVR_3x3x3_colored" parent="." instance=ExtResource("1_a202f")]
+visible = false
 
 [node name="Cube" parent="cristamagVR_3x3x3_colored" index="0"]
 visible = false
@@ -27,10 +33,20 @@ tracker = &"left_hand"
 tracker = &"right_hand"
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.35836798, 0.9335804, 0, -0.9335804, 0.35836798, 0, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 0.07149749, 0.99744076, 0, -0.99744076, 0.07149749, 0, 0, 0)
 light_energy = 1.882
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_noarx")
+
+[node name="Lattice" type="Node3D" parent="."]
+script = ExtResource("4_lattice")
+right_controller = NodePath("../VRRig/RightHand")
+
+[node name="DebugHUD" type="Node" parent="."]
+script = ExtResource("5_debug")
+rig = NodePath("../VRRig")
+camera = NodePath("../VRRig/XRCamera3D")
+lattice = NodePath("../Lattice")
 
 [editable path="cristamagVR_3x3x3_colored"]
