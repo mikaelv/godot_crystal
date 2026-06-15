@@ -61,30 +61,60 @@ const UNIT_CELL_B: Array[Vector3i] = [
 	Vector3i(1,1,1), Vector3i(3,3,1), Vector3i(3,1,3), Vector3i(1,3,3),
 ]
 
-# Neighbouring cells revealed one per step in the tiling phase.
-const TILE_OFFSETS: Array[Vector3i] = [
-	Vector3i(4, 0, 0),
-	Vector3i(0, 4, 0),
-	Vector3i(0, 0, 4),
-	Vector3i(4, 4, 0),
-	Vector3i(4, 0, 4),
-	Vector3i(0, 4, 4),
-	Vector3i(4, 4, 4),
-]
-
 @export var right_controller: XRController3D
 @export var advance_button: StringName = &"ax_button"
 @export var retreat_button: StringName = &"by_button"
+# How far the tiling extends (in cells) in each direction. radius=2 means
+# the lattice grows to a 5×5×5 supercell (124 tile steps + the original cell).
+# Each cell adds ~18 mesh instances after dedup; 5×5×5 stays comfortably
+# under a few thousand draws. Raise carefully for VR — perf scales with cells³.
+@export_range(1, 4, 1) var max_tile_radius: int = 2
 
 var _step: int = 0
 var _step_nodes: Array[Node3D] = []
 var _atoms: Dictionary = {}
 var _bonds_drawn: Dictionary = {}  # canonical bond key -> true, to dedupe
+var _tile_offsets: Array[Vector3i] = []  # ordered list of cells to reveal
 
 func _ready() -> void:
+	_build_tile_sequence()
 	if right_controller:
 		right_controller.button_pressed.connect(_on_button)
 	_advance()
+
+# Enumerates all cells within ±max_tile_radius of the original, sorted so the
+# closest cells in the +X+Y+Z octant come first (preserving the previous order
+# of the 7 starter tiles), then expanding outward in concentric shells.
+func _build_tile_sequence() -> void:
+	_tile_offsets.clear()
+	for i in range(-max_tile_radius, max_tile_radius + 1):
+		for j in range(-max_tile_radius, max_tile_radius + 1):
+			for k in range(-max_tile_radius, max_tile_radius + 1):
+				if i == 0 and j == 0 and k == 0:
+					continue
+				_tile_offsets.append(Vector3i(i * CELL_SIZE, j * CELL_SIZE, k * CELL_SIZE))
+	_tile_offsets.sort_custom(_compare_tile_offsets)
+
+func _compare_tile_offsets(a: Vector3i, b: Vector3i) -> bool:
+	# Chebyshev distance: cells inside a smaller bounding box come first.
+	var cheby_a: int = maxi(maxi(absi(a.x), absi(a.y)), absi(a.z))
+	var cheby_b: int = maxi(maxi(absi(b.x), absi(b.y)), absi(b.z))
+	if cheby_a != cheby_b:
+		return cheby_a < cheby_b
+	# Within a shell: fewer negative coords first (so +X+Y+Z octant leads).
+	var neg_a: int = int(a.x < 0) + int(a.y < 0) + int(a.z < 0)
+	var neg_b: int = int(b.x < 0) + int(b.y < 0) + int(b.z < 0)
+	if neg_a != neg_b:
+		return neg_a < neg_b
+	# Then Manhattan: faces, then edges, then corners.
+	var manh_a: int = absi(a.x) + absi(a.y) + absi(a.z)
+	var manh_b: int = absi(b.x) + absi(b.y) + absi(b.z)
+	if manh_a != manh_b:
+		return manh_a < manh_b
+	# Lex tiebreak.
+	if a.x != b.x: return a.x > b.x
+	if a.y != b.y: return a.y > b.y
+	return a.z > b.z
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -132,7 +162,7 @@ func _run_step(step: int, container: Node3D) -> bool:
 		7: _spawn_cube(container, Vector3i.ZERO, COLOR_CELL, 0.04)
 		8: _spawn_cell_a_bonds(container, Vector3i.ZERO)
 		_:
-			if step >= 9 and step < 9 + TILE_OFFSETS.size():
+			if step >= 9 and step < 9 + _tile_offsets.size():
 				_step_add_tile(container, step - 9)
 			else:
 				return false
@@ -212,11 +242,11 @@ func _step_far_atoms_and_bonds(container: Node3D) -> void:
 	for corner in LONE_CORNERS:
 		_spawn_atom(container, corner, COLOR_A)
 
-# Steps 9–15: add one neighbouring unit cell per press, building up the 2×2×2 supercell.
-# Each tile draws its own A-atom outward bonds, so the same dangler-and-link
-# pattern shown for the original cell repeats on every tile.
+# Each press past step 8 adds one neighbouring unit cell, working outward in
+# concentric shells. Each tile draws its own A-atom outward bonds, so the same
+# dangler-and-link pattern repeats consistently from cell to cell.
 func _step_add_tile(container: Node3D, idx: int) -> void:
-	var offset: Vector3i = TILE_OFFSETS[idx]
+	var offset: Vector3i = _tile_offsets[idx]
 	_spawn_unit_cell(container, offset)
 	_spawn_cell_a_bonds(container, offset)
 	_spawn_cube(container, offset, COLOR_CELL_NEIGHBOR, 0.025)
