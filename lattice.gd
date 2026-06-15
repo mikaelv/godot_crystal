@@ -126,6 +126,38 @@ func _run_step(step: int, container: Node3D) -> bool:
 func _step_central_bonds(container: Node3D) -> void:
 	for d in BONDS_A_TO_B:
 		_spawn_bond(container, CENTRAL_B, CENTRAL_B - d)
+	_spawn_angle_indicator(container, BONDS_A_TO_B[0], BONDS_A_TO_B[1])
+
+# Draws an arc between two of the central B atom's bonds and floats a
+# "109.47°" label at the arc midpoint, anchoring the bond-angle insight.
+func _spawn_angle_indicator(container: Node3D, d1: Vector3i, d2: Vector3i) -> void:
+	var center := _qc_to_world(CENTRAL_B)
+	# Bond directions from the B atom toward its A neighbours.
+	var dir1 := -Vector3(d1).normalized()
+	var dir2 := -Vector3(d2).normalized()
+	var axis := dir1.cross(dir2).normalized()
+	var total := dir1.angle_to(dir2)
+	var arc_radius := 0.7
+	var segments := 24
+	var prev := center + dir1 * arc_radius
+	for i in range(1, segments + 1):
+		var t := float(i) / float(segments)
+		var rotated := dir1.rotated(axis, total * t)
+		var curr := center + rotated * arc_radius
+		_spawn_segment(container, prev, curr, COLOR_CELL, 0.025)
+		prev = curr
+	var mid_dir := dir1.slerp(dir2, 0.5).normalized()
+	var label := Label3D.new()
+	label.text = "109.47°"
+	label.font_size = 96
+	label.pixel_size = 0.004
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.modulate = COLOR_CELL
+	label.outline_modulate = Color(0, 0, 0, 0.9)
+	label.outline_size = 12
+	label.position = center + mid_dir * (arc_radius + 0.6)
+	container.add_child(label)
 
 # Step 3: the 4 A atoms forming the tetrahedron around the central B atom.
 func _step_tetrahedron_atoms(container: Node3D) -> void:
@@ -219,9 +251,12 @@ func _spawn_bond(container: Node3D, qc_a: Vector3i, qc_b: Vector3i) -> void:
 	_spawn_edge(container, qc_a, qc_b, COLOR_BOND, BOND_RADIUS)
 
 func _spawn_edge(container: Node3D, qc_a: Vector3i, qc_b: Vector3i, color: Color, radius: float) -> void:
-	var a := _qc_to_world(qc_a)
-	var b := _qc_to_world(qc_b)
+	_spawn_segment(container, _qc_to_world(qc_a), _qc_to_world(qc_b), color, radius)
+
+func _spawn_segment(container: Node3D, a: Vector3, b: Vector3, color: Color, radius: float) -> void:
 	var length := a.distance_to(b)
+	if length < 0.0001:
+		return
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius
