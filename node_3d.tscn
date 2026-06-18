@@ -6,7 +6,6 @@
 [ext_resource type="Script" uid="uid://csqdlf30sx55b" path="res://debug_hud.gd" id="5_debug"]
 
 [sub_resource type="Environment" id="Environment_noarx"]
-background_mode = 0
 ambient_light_source = 2
 ambient_light_color = Color(0.55, 0.6, 0.7, 1)
 ambient_light_energy = 0.35
@@ -42,7 +41,6 @@ environment = SubResource("Environment_noarx")
 [node name="Lattice" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, -2, -2)
 script = ExtResource("4_lattice")
-right_controller = NodePath("../VRRig/RightHand")
 
 [node name="DebugHUD" type="Node" parent="."]
 script = ExtResource("5_debug")
