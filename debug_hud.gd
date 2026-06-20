@@ -1,8 +1,8 @@
 extends Node
 
-@export var rig: XROrigin3D
-@export var camera: XRCamera3D
-@export var lattice: Node3D
+@onready var rig: XROrigin3D = $"../VRRig"
+@onready var camera: XRCamera3D = $"../VRRig/XRCamera3D"
+@onready var lattice: Node3D = $"../Lattice"
 
 var _label: Label
 

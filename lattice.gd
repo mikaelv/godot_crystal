@@ -66,8 +66,8 @@ const UNIT_CELL_B: Array[Vector3i] = [
 	Vector3i(1,1,1), Vector3i(3,3,1), Vector3i(3,1,3), Vector3i(1,3,3),
 ]
 
-@export var right_controller: XRController3D
-@export var left_controller: XRController3D
+@onready var right_controller: XRController3D = $"../VRRig/RightHand"
+@onready var left_controller: XRController3D = $"../VRRig/LeftHand"
 @export var advance_button: StringName = &"ax_button"
 @export var retreat_button: StringName = &"by_button"
 @export var toggle_fill_button: StringName = &"ax_button"  # on the LEFT controller
