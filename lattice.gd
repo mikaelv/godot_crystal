@@ -20,7 +20,8 @@ const ATOM_RADIUS: float = 0.45
 const ATOM_RADIUS_SPACE_FILLING: float = 0.8660254
 const SPACE_FILLING_ALPHA: float = 0.8
 const BOND_RADIUS: float = 0.10
-const COLOR_A := Color(0.45, 0.65, 0.95)      # sublattice A (blue)
+const COLOR_A := Color(0.45, 0.65, 0.95)      # sublattice A, face-centre sites (blue)
+const COLOR_A_CORNER := Color(0.55, 0.85, 0.55)  # sublattice A, unit-cell vertex sites (green)
 const COLOR_B := Color(0.95, 0.55, 0.40)      # sublattice B (orange)
 const COLOR_BOND := Color(0.75, 0.75, 0.78)
 const COLOR_CELL := Color(1.0, 0.95, 0.3)
@@ -314,18 +315,27 @@ func _qc_to_world(qc: Vector3i) -> Vector3:
 func _spawn_atom(container: Node3D, qc: Vector3i, color: Color) -> void:
 	if _atoms.has(qc):
 		return
+	var actual_color := _corner_recolor(qc, color)
 	var mesh := SphereMesh.new()
 	mesh.radius = ATOM_RADIUS
 	mesh.height = ATOM_RADIUS * 2.0
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
-	mi.material_override = _flat_material(color)
+	mi.material_override = _flat_material(actual_color)
 	mi.position = _qc_to_world(qc)
 	mi.set_meta("qc", qc)
-	mi.set_meta("base_color", color)
+	mi.set_meta("base_color", actual_color)
 	container.add_child(mi)
 	_atoms[qc] = mi
 	_apply_atom_display(mi)
+
+# Atoms sitting on a unit-cell vertex (all qc coords divisible by CELL_SIZE)
+# get the corner colour instead of the caller's default — these are the 8
+# atoms shared between 8 cells in the tiled lattice.
+func _corner_recolor(qc: Vector3i, default_color: Color) -> Color:
+	if qc.x % CELL_SIZE == 0 and qc.y % CELL_SIZE == 0 and qc.z % CELL_SIZE == 0:
+		return COLOR_A_CORNER
+	return default_color
 
 # Resizes the atom and re-tints its material based on the current display mode.
 # Ball-and-stick: opaque, small spheres, bonds clearly visible.
