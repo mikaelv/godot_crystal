@@ -21,13 +21,14 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	var lines := PackedStringArray()
 	lines.append("WASD = move    Q/E = down/up    Shift = sprint    mouse = look    Esc = release mouse")
-	lines.append("Space = next lattice step    Backspace = previous step")
+	lines.append("Space = next lattice step    Backspace = previous step    B = toggle space-filling")
 	lines.append("")
 	lines.append("Mouse: %s" % _mouse_mode_name())
 	if camera:
 		lines.append("Camera pos: %s" % _fmt_v3(camera.global_position))
 	if lattice:
-		lines.append("Lattice step: %s" % lattice.get("_step"))
+		var fill := "space-filling (transparent)" if lattice.get("_space_filling") else "ball-and-stick"
+		lines.append("Lattice step: %s    View: %s" % [lattice.get("_step"), fill])
 	_label.text = "\n".join(lines)
 
 func _fmt_v3(v: Vector3) -> String:

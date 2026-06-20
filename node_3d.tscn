@@ -44,8 +44,5 @@ script = ExtResource("4_lattice")
 
 [node name="DebugHUD" type="Node" parent="."]
 script = ExtResource("5_debug")
-rig = NodePath("../VRRig")
-camera = NodePath("../VRRig/XRCamera3D")
-lattice = NodePath("../Lattice")
 
 [editable path="cristamagVR_3x3x3_colored"]

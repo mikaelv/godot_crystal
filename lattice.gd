@@ -14,6 +14,11 @@ class_name Lattice
 const A: float = 4.0                          # lattice constant (scene units)
 const CELL_SIZE: int = 4                      # in quarter-cell units
 const ATOM_RADIUS: float = 0.45
+# Bond length is √3 in scene units (qc step = A/4 = 1, bond is (1,1,1) long),
+# so radius √3/2 makes spheres touch exactly along bonds — the canonical
+# space-filling representation. Close to Si's covalent-radius / bond ratio.
+const ATOM_RADIUS_SPACE_FILLING: float = 0.8660254
+const SPACE_FILLING_ALPHA: float = 0.8
 const BOND_RADIUS: float = 0.10
 const COLOR_A := Color(0.45, 0.65, 0.95)      # sublattice A (blue)
 const COLOR_B := Color(0.95, 0.55, 0.40)      # sublattice B (orange)
@@ -62,8 +67,10 @@ const UNIT_CELL_B: Array[Vector3i] = [
 ]
 
 @export var right_controller: XRController3D
+@export var left_controller: XRController3D
 @export var advance_button: StringName = &"ax_button"
 @export var retreat_button: StringName = &"by_button"
+@export var toggle_fill_button: StringName = &"ax_button"  # on the LEFT controller
 # How far the tiling extends (in cells) in each direction. radius=2 means
 # the lattice grows to a 5×5×5 supercell (124 tile steps + the original cell).
 # Each cell adds ~18 mesh instances after dedup; 5×5×5 stays comfortably
@@ -75,11 +82,14 @@ var _step_nodes: Array[Node3D] = []
 var _atoms: Dictionary = {}
 var _bonds_drawn: Dictionary = {}  # canonical bond key -> true, to dedupe
 var _tile_offsets: Array[Vector3i] = []  # ordered list of cells to reveal
+var _space_filling: bool = false
 
 func _ready() -> void:
 	_build_tile_sequence()
 	if right_controller:
 		right_controller.button_pressed.connect(_on_button)
+	if left_controller:
+		left_controller.button_pressed.connect(_on_left_button)
 	_advance()
 
 # Enumerates all cells within ±max_tile_radius of the original, sorted so the
@@ -122,12 +132,23 @@ func _unhandled_input(event: InputEvent) -> void:
 			_advance()
 		elif event.keycode == KEY_BACKSPACE:
 			_retreat()
+		elif event.keycode == KEY_B:
+			toggle_space_filling()
 
 func _on_button(p_name: String) -> void:
 	if p_name == advance_button:
 		_advance()
 	elif p_name == retreat_button:
 		_retreat()
+
+func _on_left_button(p_name: String) -> void:
+	if p_name == toggle_fill_button:
+		toggle_space_filling()
+
+func toggle_space_filling() -> void:
+	_space_filling = not _space_filling
+	for mi in _atoms.values():
+		_apply_atom_display(mi)
 
 func _advance() -> void:
 	var container := Node3D.new()
@@ -301,8 +322,26 @@ func _spawn_atom(container: Node3D, qc: Vector3i, color: Color) -> void:
 	mi.material_override = _flat_material(color)
 	mi.position = _qc_to_world(qc)
 	mi.set_meta("qc", qc)
+	mi.set_meta("base_color", color)
 	container.add_child(mi)
 	_atoms[qc] = mi
+	_apply_atom_display(mi)
+
+# Resizes the atom and re-tints its material based on the current display mode.
+# Ball-and-stick: opaque, small spheres, bonds clearly visible.
+# Space-filling: large transparent spheres that touch along bonds, with bond
+# cylinders still visible through them.
+func _apply_atom_display(mi: MeshInstance3D) -> void:
+	var base: Color = mi.get_meta("base_color")
+	var mat: StandardMaterial3D = mi.material_override
+	if _space_filling:
+		mi.scale = Vector3.ONE * (ATOM_RADIUS_SPACE_FILLING / ATOM_RADIUS)
+		mat.albedo_color = Color(base.r, base.g, base.b, SPACE_FILLING_ALPHA)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	else:
+		mi.scale = Vector3.ONE
+		mat.albedo_color = base
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 
 func _spawn_bond(container: Node3D, qc_a: Vector3i, qc_b: Vector3i) -> void:
 	var key := _bond_key(qc_a, qc_b)
