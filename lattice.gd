@@ -154,6 +154,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_advance()
 		elif event.keycode == KEY_BACKSPACE:
 			_retreat()
+		elif event.keycode == KEY_TAB:
+			if event.shift_pressed:
+				_retreat_shell()
+			else:
+				_advance_shell()
 		elif event.keycode == KEY_B:
 			toggle_space_filling()
 		elif event.keycode == KEY_1:
@@ -210,6 +215,39 @@ func _advance() -> void:
 		_step += 1
 	else:
 		container.queue_free()
+
+# Advances at least one step, then continues while the *next* tile to place
+# is in the same Chebyshev shell as the one we just placed. So one press
+# fills out the rest of the current shell of unit cells. In the pre-tiling
+# phase (step < 9) this degrades to a single step, since the shell concept
+# doesn't apply to the per-atom build-up of the original cell.
+func _advance_shell() -> void:
+	_advance()
+	while _step >= 9 and _step - 9 + 1 < _tile_offsets.size():
+		var current_shell := _shell_of(_tile_offsets[_step - 9])
+		var next_shell := _shell_of(_tile_offsets[_step - 9 + 1])
+		if next_shell != current_shell:
+			break
+		_advance()
+
+# Symmetric to _advance_shell: removes the tile we'd put back with a single
+# undo, then keeps retreating while the top of the stack is still in that
+# same shell. Net effect: one press undoes the whole current shell (whether
+# fully placed or partially placed).
+func _retreat_shell() -> void:
+	if _step < 9:
+		_retreat()
+		return
+	var target_shell := _shell_of(_tile_offsets[_step - 9])
+	_retreat()
+	while _step >= 9 and _shell_of(_tile_offsets[_step - 9]) == target_shell:
+		_retreat()
+
+# Chebyshev distance from origin, in pre-scaled tile-offset units
+# (offsets are stored as multiples of CELL_SIZE, so this returns shell*CELL_SIZE
+# — but we only compare for equality, so the scaling doesn't matter).
+func _shell_of(offset: Vector3i) -> int:
+	return maxi(maxi(absi(offset.x), absi(offset.y)), absi(offset.z))
 
 func _retreat() -> void:
 	if _step_nodes.is_empty():
