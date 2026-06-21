@@ -27,6 +27,18 @@ const COLOR_BOND := Color(0.75, 0.75, 0.78)
 const COLOR_CELL := Color(1.0, 0.95, 0.3)
 const COLOR_CELL_NEIGHBOR := Color(0.55, 0.5, 0.2)
 
+# Categories of scene elements the user can show/hide. DECORATION (the 109.47°
+# arc + label) is grouped with BOND for visibility but kept distinct so it
+# could ever get its own toggle without reshuffling tags.
+enum Element { CORNER, FACE, B, BOND, WIREFRAME, DECORATION }
+
+# Metadata keys used on spawned nodes. Lifted into constants so the strings
+# only exist in one place (and so typos fail at parse time, not at runtime).
+const META_QC: StringName = &"qc"                  # atom identity (Vector3i)
+const META_BASE_COLOR: StringName = &"base_color"  # atom colour pre-transparency
+const META_BOND_KEY: StringName = &"bond_key"      # bond dedup key (String)
+const META_ELEMENT: StringName = &"element"        # which Element this node is
+
 # Bond offsets from a sublattice-A atom. From a B atom the offsets are negated.
 const BONDS_A_TO_B: Array[Vector3i] = [
 	Vector3i( 1,  1,  1),
@@ -85,6 +97,15 @@ var _bonds_drawn: Dictionary = {}  # canonical bond key -> true, to dedupe
 var _tile_offsets: Array[Vector3i] = []  # ordered list of cells to reveal
 var _space_filling: bool = false
 
+# Per-Element visibility, toggleable via 1–5.
+var _show: Dictionary = {
+	Element.CORNER: true,     # 1 — green atoms (unit-cell vertices)
+	Element.FACE: true,       # 2 — blue atoms (face-centre A)
+	Element.B: true,          # 3 — orange atoms (interior B)
+	Element.WIREFRAME: true,  # 4 — cube outlines
+	Element.BOND: true,       # 5 — bond cylinders + angle indicator
+}
+
 func _ready() -> void:
 	_build_tile_sequence()
 	if right_controller:
@@ -135,6 +156,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_retreat()
 		elif event.keycode == KEY_B:
 			toggle_space_filling()
+		elif event.keycode == KEY_1:
+			toggle_visibility(Element.CORNER)
+		elif event.keycode == KEY_2:
+			toggle_visibility(Element.FACE)
+		elif event.keycode == KEY_3:
+			toggle_visibility(Element.B)
+		elif event.keycode == KEY_4:
+			toggle_visibility(Element.WIREFRAME)
+		elif event.keycode == KEY_5:
+			toggle_visibility(Element.BOND)
 
 func _on_button(p_name: String) -> void:
 	if p_name == advance_button:
@@ -151,6 +182,25 @@ func toggle_space_filling() -> void:
 	for mi in _atoms.values():
 		_apply_atom_display(mi)
 
+func toggle_visibility(element: Element) -> void:
+	if not _show.has(element):
+		return
+	_show[element] = not _show[element]
+	for container in _step_nodes:
+		for child in container.get_children():
+			_apply_visibility_to(child)
+
+# Reads the node's Element meta and applies the corresponding _show flag.
+# Called on toggle and on spawn, so the visibility state is always consistent.
+func _apply_visibility_to(node: Node) -> void:
+	if not node.has_meta(META_ELEMENT):
+		return
+	var element: int = node.get_meta(META_ELEMENT)
+	# DECORATION rides along with BOND — the angle indicator is meaningless
+	# without the bonds it annotates.
+	var key: int = Element.BOND if element == Element.DECORATION else element
+	node.visible = _show[key]
+
 func _advance() -> void:
 	var container := Node3D.new()
 	add_child(container)
@@ -166,10 +216,10 @@ func _retreat() -> void:
 		return
 	var container: Node3D = _step_nodes.pop_back()
 	for child in container.get_children():
-		if child.has_meta("qc"):
-			_atoms.erase(child.get_meta("qc"))
-		if child.has_meta("bond_key"):
-			_bonds_drawn.erase(child.get_meta("bond_key"))
+		if child.has_meta(META_QC):
+			_atoms.erase(child.get_meta(META_QC))
+		if child.has_meta(META_BOND_KEY):
+			_bonds_drawn.erase(child.get_meta(META_BOND_KEY))
 	container.queue_free()
 	_step -= 1
 
@@ -214,7 +264,10 @@ func _spawn_angle_indicator(container: Node3D, d1: Vector3i, d2: Vector3i) -> vo
 		var t := float(i) / float(segments)
 		var rotated := dir1.rotated(axis, total * t)
 		var curr := center + rotated * arc_radius
-		_spawn_segment(container, prev, curr, COLOR_CELL, 0.025)
+		var seg := _spawn_segment(container, prev, curr, COLOR_CELL, 0.025)
+		if seg:
+			seg.set_meta(META_ELEMENT, Element.DECORATION)
+			_apply_visibility_to(seg)
 		prev = curr
 	var mid_dir := dir1.slerp(dir2, 0.5).normalized()
 	var label := Label3D.new()
@@ -227,7 +280,9 @@ func _spawn_angle_indicator(container: Node3D, d1: Vector3i, d2: Vector3i) -> vo
 	label.outline_modulate = Color(0, 0, 0, 0.9)
 	label.outline_size = 12
 	label.position = center + mid_dir * (arc_radius + 0.6)
+	label.set_meta(META_ELEMENT, Element.DECORATION)
 	container.add_child(label)
+	_apply_visibility_to(label)
 
 # Step 3: the 4 A atoms forming the tetrahedron around the central B atom.
 func _step_tetrahedron_atoms(container: Node3D) -> void:
@@ -305,7 +360,10 @@ func _spawn_cube(container: Node3D, offset: Vector3i, color: Color, radius: floa
 		[0,4],[1,5],[2,6],[3,7],
 	]
 	for e in edges:
-		_spawn_edge(container, c[e[0]] + offset, c[e[1]] + offset, color, radius)
+		var mi := _spawn_edge(container, c[e[0]] + offset, c[e[1]] + offset, color, radius)
+		if mi:
+			mi.set_meta(META_ELEMENT, Element.WIREFRAME)
+			_apply_visibility_to(mi)
 
 # --- Primitives ---------------------------------------------------------------
 
@@ -315,7 +373,8 @@ func _qc_to_world(qc: Vector3i) -> Vector3:
 func _spawn_atom(container: Node3D, qc: Vector3i, color: Color) -> void:
 	if _atoms.has(qc):
 		return
-	var actual_color := _corner_recolor(qc, color)
+	var cls: int = _atom_class(qc)
+	var actual_color := COLOR_A_CORNER if cls == Element.CORNER else color
 	var mesh := SphereMesh.new()
 	mesh.radius = ATOM_RADIUS
 	mesh.height = ATOM_RADIUS * 2.0
@@ -323,26 +382,31 @@ func _spawn_atom(container: Node3D, qc: Vector3i, color: Color) -> void:
 	mi.mesh = mesh
 	mi.material_override = _flat_material(actual_color)
 	mi.position = _qc_to_world(qc)
-	mi.set_meta("qc", qc)
-	mi.set_meta("base_color", actual_color)
+	mi.set_meta(META_QC, qc)
+	mi.set_meta(META_BASE_COLOR, actual_color)
+	mi.set_meta(META_ELEMENT, cls)
 	container.add_child(mi)
 	_atoms[qc] = mi
 	_apply_atom_display(mi)
+	_apply_visibility_to(mi)
 
-# Atoms sitting on a unit-cell vertex (all qc coords divisible by CELL_SIZE)
-# get the corner colour instead of the caller's default — these are the 8
-# atoms shared between 8 cells in the tiled lattice.
-func _corner_recolor(qc: Vector3i, default_color: Color) -> Color:
+# Classifies an atom from its quarter-cell coords:
+# - CORNER: all coords divisible by CELL_SIZE — unit-cell vertices
+# - B:      i+j+k ≡ 3 (mod 4) — interior B sublattice
+# - FACE:   otherwise — face-centre A sublattice
+func _atom_class(qc: Vector3i) -> Element:
 	if qc.x % CELL_SIZE == 0 and qc.y % CELL_SIZE == 0 and qc.z % CELL_SIZE == 0:
-		return COLOR_A_CORNER
-	return default_color
+		return Element.CORNER
+	if posmod(qc.x + qc.y + qc.z, 4) == 3:
+		return Element.B
+	return Element.FACE
 
 # Resizes the atom and re-tints its material based on the current display mode.
 # Ball-and-stick: opaque, small spheres, bonds clearly visible.
 # Space-filling: large transparent spheres that touch along bonds, with bond
 # cylinders still visible through them.
 func _apply_atom_display(mi: MeshInstance3D) -> void:
-	var base: Color = mi.get_meta("base_color")
+	var base: Color = mi.get_meta(META_BASE_COLOR)
 	var mat: StandardMaterial3D = mi.material_override
 	if _space_filling:
 		mi.scale = Vector3.ONE * (ATOM_RADIUS_SPACE_FILLING / ATOM_RADIUS)
@@ -360,9 +424,11 @@ func _spawn_bond(container: Node3D, qc_a: Vector3i, qc_b: Vector3i) -> void:
 	var mi := _make_segment(_qc_to_world(qc_a), _qc_to_world(qc_b), COLOR_BOND, BOND_RADIUS)
 	if mi == null:
 		return
-	mi.set_meta("bond_key", key)
+	mi.set_meta(META_BOND_KEY, key)
+	mi.set_meta(META_ELEMENT, Element.BOND)
 	_bonds_drawn[key] = true
 	container.add_child(mi)
+	_apply_visibility_to(mi)
 
 func _bond_key(qc_a: Vector3i, qc_b: Vector3i) -> String:
 	# Canonical (unordered) key so a bond drawn from either side dedupes.
@@ -372,13 +438,14 @@ func _bond_key(qc_a: Vector3i, qc_b: Vector3i) -> String:
 		return sa + "|" + sb
 	return sb + "|" + sa
 
-func _spawn_edge(container: Node3D, qc_a: Vector3i, qc_b: Vector3i, color: Color, radius: float) -> void:
-	_spawn_segment(container, _qc_to_world(qc_a), _qc_to_world(qc_b), color, radius)
+func _spawn_edge(container: Node3D, qc_a: Vector3i, qc_b: Vector3i, color: Color, radius: float) -> MeshInstance3D:
+	return _spawn_segment(container, _qc_to_world(qc_a), _qc_to_world(qc_b), color, radius)
 
-func _spawn_segment(container: Node3D, a: Vector3, b: Vector3, color: Color, radius: float) -> void:
+func _spawn_segment(container: Node3D, a: Vector3, b: Vector3, color: Color, radius: float) -> MeshInstance3D:
 	var mi := _make_segment(a, b, color, radius)
 	if mi:
 		container.add_child(mi)
+	return mi
 
 func _make_segment(a: Vector3, b: Vector3, color: Color, radius: float) -> MeshInstance3D:
 	var length := a.distance_to(b)

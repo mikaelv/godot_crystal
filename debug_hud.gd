@@ -21,7 +21,8 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	var lines := PackedStringArray()
 	lines.append("WASD = move    Q/E = down/up    Shift = sprint    mouse = look    Esc = release mouse")
-	lines.append("Space = next lattice step    Backspace = previous step    B = toggle space-filling")
+	lines.append("Space = next step    Backspace = previous step    B = space-filling")
+	lines.append("1 = corners (green)    2 = faces (blue)    3 = B atoms (orange)    4 = cubes    5 = bonds")
 	lines.append("")
 	lines.append("Mouse: %s" % _mouse_mode_name())
 	if camera:
