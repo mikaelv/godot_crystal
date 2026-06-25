@@ -150,7 +150,7 @@ func _process_xr(delta: float) -> void:
 		if turn.x != 0.0:
 			rotate_y(-turn.x * turn_speed * delta)
 		if turn.y != 0.0:
-			global_translate(Vector3.UP * -turn.y * move_speed * delta)
+			rotate_object_local(Vector3.RIGHT, turn.y * turn_speed * delta)
 
 # OpenXR exposes the thumbstick under the action-map name "primary"; WebXR
 # uses the standard Gamepad mapping name "thumbstick" instead. Try both.

@@ -61,7 +61,7 @@ func _process(_delta: float) -> void:
 	var lines := PackedStringArray()
 	if xr:
 		lines.append("Left Y = hide/show HUD")
-		lines.append("Left stick = move   Right stick X = turn   Y = up/down")
+		lines.append("Left stick = move   Right stick X = turn   Y = pitch")
 		lines.append("Right A = step+   Right B = step-")
 		lines.append("Right grip + A/B = shell +/-")
 		lines.append("Left X = space-filling")
