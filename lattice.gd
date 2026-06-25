@@ -173,10 +173,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			toggle_visibility(Element.BOND)
 
 func _on_button(p_name: String) -> void:
+	# Right grip held = shell jump (mirrors keyboard Shift+Tab semantics);
+	# bare A/B = single step.
+	var shell_mod: bool = right_controller != null and right_controller.is_button_pressed(&"grip_click")
 	if p_name == advance_button:
-		_advance()
+		if shell_mod:
+			_advance_shell()
+		else:
+			_advance()
 	elif p_name == retreat_button:
-		_retreat()
+		if shell_mod:
+			_retreat_shell()
+		else:
+			_retreat()
 
 func _on_left_button(p_name: String) -> void:
 	if p_name == toggle_fill_button:
