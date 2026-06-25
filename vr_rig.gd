@@ -136,7 +136,7 @@ func _process_desktop(delta: float) -> void:
 
 func _process_xr(delta: float) -> void:
 	if left_controller:
-		var move := left_controller.get_vector2("primary")
+		var move := _stick(left_controller)
 		if move != Vector2.ZERO:
 			var forward := -xr_camera.global_transform.basis.z
 			var right := xr_camera.global_transform.basis.x
@@ -146,6 +146,16 @@ func _process_xr(delta: float) -> void:
 			right = right.normalized()
 			global_translate((right * move.x + forward * move.y) * move_speed * delta)
 	if right_controller:
-		var turn := right_controller.get_vector2("primary")
+		var turn := _stick(right_controller)
 		if turn.x != 0.0:
 			rotate_y(-turn.x * turn_speed * delta)
+		if turn.y != 0.0:
+			global_translate(Vector3.UP * -turn.y * move_speed * delta)
+
+# OpenXR exposes the thumbstick under the action-map name "primary"; WebXR
+# uses the standard Gamepad mapping name "thumbstick" instead. Try both.
+func _stick(controller: XRController3D) -> Vector2:
+	var v := controller.get_vector2("primary")
+	if v == Vector2.ZERO:
+		v = controller.get_vector2("thumbstick")
+	return v
