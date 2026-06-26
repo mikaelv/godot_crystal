@@ -22,6 +22,7 @@ var _pitch: float = 0.0
 
 var _webxr_interface: WebXRInterface
 var _enter_vr_button: Button
+var _enter_ar_button: Button
 
 func _ready() -> void:
 	var xr := XRServer.find_interface("OpenXR")
@@ -44,7 +45,8 @@ func _ready() -> void:
 		_webxr_interface.session_ended.connect(_on_webxr_session_ended)
 		_webxr_interface.session_failed.connect(_on_webxr_session_failed)
 		_webxr_interface.is_session_supported("immersive-vr")
-		_setup_enter_vr_button()
+		_webxr_interface.is_session_supported("immersive-ar")
+		_setup_enter_xr_buttons()
 	# Desktop free-fly: put the camera at eye height with no XR offset,
 	# back the rig away from the lattice so we can see it on spawn.
 	xr_camera.position = Vector3(0, 1.6, 0)
@@ -52,29 +54,45 @@ func _ready() -> void:
 	global_position = Vector3(0, 0, 6)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
-# Tiny on-screen button shown only when the browser reports an immersive-vr
-# session is available. Clicking it triggers initialize() from inside the
+# Tiny on-screen buttons shown only when the browser reports a session of
+# that type is available. Clicking triggers initialize() from inside the
 # user gesture, which is the only context browsers allow it from.
-func _setup_enter_vr_button() -> void:
+func _setup_enter_xr_buttons() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 101
 	add_child(layer)
-	_enter_vr_button = Button.new()
-	_enter_vr_button.text = "  Enter VR  "
-	_enter_vr_button.add_theme_font_size_override("font_size", 28)
-	_enter_vr_button.position = Vector2(20, 80)
-	_enter_vr_button.visible = false
-	_enter_vr_button.pressed.connect(_enter_webxr)
+	_enter_vr_button = _make_xr_button("  Enter VR  ", Vector2(20, 80), _enter_webxr_vr)
 	layer.add_child(_enter_vr_button)
+	_enter_ar_button = _make_xr_button("  Enter AR  ", Vector2(20, 140), _enter_webxr_ar)
+	layer.add_child(_enter_ar_button)
+
+func _make_xr_button(text: String, pos: Vector2, callback: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.add_theme_font_size_override("font_size", 28)
+	b.position = pos
+	b.visible = false
+	b.pressed.connect(callback)
+	return b
 
 func _on_webxr_session_supported(session_mode: String, supported: bool) -> void:
-	if session_mode == "immersive-vr" and supported and _enter_vr_button:
+	if not supported:
+		return
+	if session_mode == "immersive-vr" and _enter_vr_button:
 		_enter_vr_button.visible = true
+	elif session_mode == "immersive-ar" and _enter_ar_button:
+		_enter_ar_button.visible = true
 
-func _enter_webxr() -> void:
+func _enter_webxr_vr() -> void:
+	_start_webxr("immersive-vr")
+
+func _enter_webxr_ar() -> void:
+	_start_webxr("immersive-ar")
+
+func _start_webxr(mode: String) -> void:
 	if _webxr_interface == null:
 		return
-	_webxr_interface.session_mode = "immersive-vr"
+	_webxr_interface.session_mode = mode
 	_webxr_interface.requested_reference_space_types = "local-floor, local"
 	_webxr_interface.required_features = "local-floor"
 	_webxr_interface.optional_features = "bounded-floor"
@@ -84,19 +102,30 @@ func _enter_webxr() -> void:
 func _on_webxr_session_started() -> void:
 	get_viewport().use_xr = true
 	_xr_active = true
+	# In AR the compositor uses alpha-blend, so making the viewport
+	# transparent reveals the headset's passthrough camera feed.
+	if _webxr_interface and _webxr_interface.environment_blend_mode == XRInterface.XR_ENV_BLEND_MODE_ALPHA_BLEND:
+		get_viewport().transparent_bg = true
 	if _enter_vr_button:
 		_enter_vr_button.visible = false
+	if _enter_ar_button:
+		_enter_ar_button.visible = false
 
 func _on_webxr_session_ended() -> void:
 	_xr_active = false
 	get_viewport().use_xr = false
+	get_viewport().transparent_bg = false
 	if _enter_vr_button:
 		_enter_vr_button.visible = true
+	if _enter_ar_button:
+		_enter_ar_button.visible = true
 
 func _on_webxr_session_failed(message: String) -> void:
 	push_warning("WebXR session failed: %s" % message)
 	if _enter_vr_button:
 		_enter_vr_button.visible = true
+	if _enter_ar_button:
+		_enter_ar_button.visible = true
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _xr_active:
