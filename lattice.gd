@@ -161,15 +161,15 @@ func _unhandled_input(event: InputEvent) -> void:
 				_advance_shell()
 		elif event.keycode == KEY_B:
 			toggle_space_filling()
-		elif event.keycode == KEY_1:
+		elif event.keycode == KEY_1 or event.keycode == KEY_KP_1:
 			toggle_visibility(Element.CORNER)
-		elif event.keycode == KEY_2:
+		elif event.keycode == KEY_2 or event.keycode == KEY_KP_2:
 			toggle_visibility(Element.FACE)
-		elif event.keycode == KEY_3:
+		elif event.keycode == KEY_3 or event.keycode == KEY_KP_3:
 			toggle_visibility(Element.B)
-		elif event.keycode == KEY_4:
+		elif event.keycode == KEY_4 or event.keycode == KEY_KP_4:
 			toggle_visibility(Element.WIREFRAME)
-		elif event.keycode == KEY_5:
+		elif event.keycode == KEY_5 or event.keycode == KEY_KP_5:
 			toggle_visibility(Element.BOND)
 
 func _on_button(p_name: String) -> void:
