@@ -3,16 +3,30 @@
 [ext_resource type="Script" uid="uid://bsdpwc14ebhv4" path="res://vr_rig.gd" id="3_a0tk4"]
 [ext_resource type="Script" uid="uid://dlbjnjcyigo3k" path="res://lattice.gd" id="4_lattice"]
 [ext_resource type="Script" uid="uid://csqdlf30sx55b" path="res://debug_hud.gd" id="5_debug"]
+[ext_resource type="Script" path="res://floor_grid.gd" id="6_floor_grid"]
 
 [sub_resource type="Environment" id="Environment_noarx"]
 ambient_light_source = 2
 ambient_light_color = Color(0.55, 0.6, 0.7, 1)
 ambient_light_energy = 0.35
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
+transparency = 1
+albedo_color = Color(0.42, 0.42, 0.4, 0.32)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_floor"]
+size = Vector2(80, 80)
+
 [node name="Node3D" type="Node3D" unique_id=1913848494]
 
 [node name="cristamagVR_3x3x3_colored" parent="." unique_id=1824326214]
 visible = false
+
+[node name="NeutralConcreteFloor" type="MeshInstance3D" parent="." unique_id=260059904]
+mesh = SubResource("PlaneMesh_floor")
+material_override = SubResource("StandardMaterial3D_floor")
+script = ExtResource("6_floor_grid")
 
 [node name="VRRig" type="XROrigin3D" parent="." unique_id=150905196]
 script = ExtResource("3_a0tk4")

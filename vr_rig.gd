@@ -13,6 +13,9 @@ extends XROrigin3D
 @export var keyboard_look_speed: float = 1.5  # rad/s — desktop arrow keys
 @export var turn_speed: float = 1.5           # XR right-stick yaw
 
+const DESKTOP_CAMERA_START_POSITION := Vector3(0, 1.6, 0)
+const DESKTOP_RIG_START_POSITION := Vector3(0, 0, 6)
+
 @onready var xr_camera: XRCamera3D = $XRCamera3D
 @onready var left_controller: XRController3D = $LeftHand
 @onready var right_controller: XRController3D = $RightHand
@@ -50,9 +53,8 @@ func _ready() -> void:
 		_setup_enter_xr_buttons()
 	# Desktop free-fly: put the camera at eye height with no XR offset,
 	# back the rig away from the lattice so we can see it on spawn.
-	xr_camera.position = Vector3(0, 1.6, 0)
 	xr_camera.current = true
-	global_position = Vector3(0, 0, 6)
+	_reset_desktop_view()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 # Tiny on-screen buttons shown only when the browser reports a session of
@@ -138,6 +140,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		elif event.keycode == KEY_ASTERISK or event.keycode == KEY_KP_MULTIPLY:
+			_reset_desktop_view()
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -173,6 +177,14 @@ func _process_desktop(delta: float) -> void:
 	# Camera-local input → world, so W follows where you're looking.
 	var world_move := xr_camera.global_transform.basis * input.normalized()
 	global_translate(world_move * speed * delta)
+
+func _reset_desktop_view() -> void:
+	_yaw = 0.0
+	_pitch = 0.0
+	position = DESKTOP_RIG_START_POSITION
+	rotation = Vector3.ZERO
+	xr_camera.position = DESKTOP_CAMERA_START_POSITION
+	xr_camera.rotation = Vector3.ZERO
 
 func _process_xr(delta: float) -> void:
 	if left_controller:
