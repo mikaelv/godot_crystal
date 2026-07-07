@@ -68,7 +68,7 @@ func _process(_delta: float) -> void:
 	else:
 		lines.append("H = hide/show HUD")
 		lines.append("WASD = move   Q/E = down/up   Shift = sprint")
-		lines.append("Mouse = look   Esc = release mouse")
+		lines.append("Mouse/Arrows = look   Esc = release mouse")
 		lines.append("Space/Backspace = step   Tab/Shift+Tab = shell   B = space-filling")
 		lines.append("1 corners (green)  2 faces (blue)  3 B atoms (orange)  4 cubes  5 bonds")
 	lines.append("")

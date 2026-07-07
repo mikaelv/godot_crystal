@@ -10,6 +10,7 @@ extends XROrigin3D
 
 @export var move_speed: float = 4.0           # m/s — desktop and XR thumbstick
 @export var look_sensitivity: float = 0.0025  # desktop mouse-look
+@export var keyboard_look_speed: float = 1.5  # rad/s — desktop arrow keys
 @export var turn_speed: float = 1.5           # XR right-stick yaw
 
 @onready var xr_camera: XRCamera3D = $XRCamera3D
@@ -147,6 +148,16 @@ func _process(delta: float) -> void:
 		_process_desktop(delta)
 
 func _process_desktop(delta: float) -> void:
+	var look_input := Vector2.ZERO
+	if Input.is_physical_key_pressed(KEY_LEFT): look_input.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_RIGHT): look_input.x += 1.0
+	if Input.is_physical_key_pressed(KEY_UP): look_input.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_DOWN): look_input.y += 1.0
+	if look_input != Vector2.ZERO:
+		_yaw -= look_input.x * keyboard_look_speed * delta
+		_pitch = clamp(_pitch + look_input.y * keyboard_look_speed * delta, -PI * 0.49, PI * 0.49)
+		xr_camera.rotation = Vector3(_pitch, _yaw, 0)
+
 	var input := Vector3.ZERO
 	if Input.is_physical_key_pressed(KEY_W): input.z -= 1.0
 	if Input.is_physical_key_pressed(KEY_S): input.z += 1.0
